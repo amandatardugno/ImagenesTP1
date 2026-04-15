@@ -47,8 +47,19 @@ def bordesExamen(img):
     bordes = {
         0:((0,0),(ancho_imagen,bottom[0]))
         }
-    for i in range(0,10):
-        bordes[i+1]=((left[(i//5)*2],top[i%5]),(right[(i//5)*2+1],bottom[i%5+1]))
+    
+    # Eliminamos las coordenadas fuera de los ejercicios
+    del right[0]
+    del bottom[0]
+    del left[1]
+    del right[1]
+    del top[-1]
+    del left[-1]
+
+    for e in range(0,10):
+        i = e%5
+        j = e//5
+        bordes[e+1]=((left[j],top[i]),(right[j],bottom[i]))
 
     return bordes
 
