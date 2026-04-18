@@ -149,6 +149,101 @@ def extraerCaracteristicasLetra(roi_letra):
                 
     return cantidad_agujeros, area_agujero_max
 
+def contarPalabras(chars):
+    """
+    Recibe una lista de stats de caracteres (x, y, w, h) ordenados por x.
+    Cuenta cuántas palabras forman separando por gaps horizontales grandes.
+    """
+    if not chars:
+        return 0
+
+    # Usamos el alto promedio como referencia (más uniforme que el ancho).
+    # Un espacio entre palabras suele ser ~0.5 del alto del caracter.
+    alto_prom = sum(c[3] for c in chars) / len(chars)
+    th_gap = alto_prom * 0.45
+
+    palabras = 1
+    for i in range(1, len(chars)):
+        x_prev, _, w_prev, _ = chars[i-1]
+        x_curr = chars[i][0]
+        gap = x_curr - (x_prev + w_prev)
+        if gap > th_gap:
+            palabras += 1
+    return palabras
+
+
+def validarEncabezado(header_img):
+    """
+    Recibe la imagen del encabezado del examen.
+
+    Detecta las 3 líneas de los campos (Name, Date, Class), toma los caracteres
+    que están sobre cada una y valida según las restricciones del enunciado.
+
+    Devuelve un dict con el estado (OK/MAL) de cada campo.
+    """
+    _, img_th = cv2.threshold(header_img, 150, 255, cv2.THRESH_BINARY_INV)
+    num_labels, _, stats, _ = cv2.connectedComponentsWithStats(img_th, 8, cv2.CV_32S)
+
+    # Separamos las componentes en líneas (mucho más anchas que altas) y caracteres
+    lineas = []
+    componentes = []
+    for i in range(1, num_labels):
+        x = stats[i, cv2.CC_STAT_LEFT]
+        y = stats[i, cv2.CC_STAT_TOP]
+        w = stats[i, cv2.CC_STAT_WIDTH]
+        h = stats[i, cv2.CC_STAT_HEIGHT]
+        area = stats[i, cv2.CC_STAT_AREA]
+
+        if area < 5:
+            continue
+        if w > 3*h and w > 30:
+            lineas.append((x, y, w, h))
+        else:
+            componentes.append((x, y, w, h))
+
+    if len(lineas) < 3:
+        return {"Name": "MAL", "Date": "MAL", "Class": "MAL"}
+
+    # Las 3 líneas más anchas son las de los campos. Las ordenamos de izquierda a derecha.
+    lineas.sort(key=lambda l: l[2], reverse=True)
+    lineas = lineas[:3]
+    lineas.sort(key=lambda l: l[0])
+
+    # Para cada línea, juntamos los caracteres que están justo arriba de la misma
+    campos = []
+    for xl, yl, wl, hl in lineas:
+        chars = []
+        for x, y, w, h in componentes:
+            cx = x + w/2
+            # El centro horizontal del char debe caer sobre la línea
+            if cx < xl or cx > xl + wl:
+                continue
+            # Debe estar arriba de la línea
+            if y + h > yl + 3:
+                continue
+            # Pero no muy lejos
+            if yl - (y + h) > 25:
+                continue
+            chars.append((x, y, w, h))
+        chars.sort(key=lambda c: c[0])
+        campos.append(chars)
+
+    name_chars, date_chars, class_chars = campos
+
+    # Name: al menos 2 palabras y no más de 25 caracteres
+    name_ok = 0 < len(name_chars) <= 25 and contarPalabras(name_chars) >= 2
+    # Date: 8 caracteres formando una sola palabra
+    date_ok = len(date_chars) == 8 and contarPalabras(date_chars) == 1
+    # Class: un único caracter
+    class_ok = len(class_chars) == 1
+
+    return {
+        "Name": "OK" if name_ok else "MAL",
+        "Date": "OK" if date_ok else "MAL",
+        "Class": "OK" if class_ok else "MAL",
+    }
+
+
 def identificarRespuestas(img):
     """
     Recibe la imagen de un ejercicio.
