@@ -34,3 +34,35 @@ for e in range(1, 11):
         agujeros, area_agujero = extraerCaracteristicasLetra(letra_roi)
         caracteristicas.append((letra, w, h, area, agujeros, area_agujero))
         print(e,letra,w,h,area, agujeros, area_agujero)
+
+colores = {'A': 'blue', 'B': 'green', 'C': 'red', 'D': 'orange'}
+
+plt.figure(figsize=(8, 6))
+plt.title('Calibración: Agujeros vs Área del Agujero', fontsize=14)
+
+for letra_buscada in ['A', 'B', 'C', 'D']:
+    # Filtramos los datos de la letra actual
+    datos_letra = [d for d in caracteristicas if d[0] == letra_buscada]
+    
+    if not datos_letra:
+        continue
+        
+    # Índice 4 es 'agujeros' y el índice 5 es 'area_agujero'
+    agujeros = [d[4] for d in datos_letra]
+    area_agujero = [d[5] for d in datos_letra]
+    c = colores[letra_buscada]
+    
+    # Hacemos el scatter plot (s=100 aumenta un poco el tamaño de los puntos)
+    plt.scatter(agujeros, area_agujero, color=c, alpha=0.7, label=f'Letra {letra_buscada}', s=100)
+
+plt.xlabel('Cantidad de Agujeros')
+plt.ylabel('Área del Agujero (px²)')
+
+# Forzamos que el eje X solo muestre números enteros
+plt.xticks([0, 1, 2]) 
+
+plt.legend(loc='best')
+plt.grid(True, linestyle='--', alpha=0.5)
+
+plt.tight_layout()
+plt.show()

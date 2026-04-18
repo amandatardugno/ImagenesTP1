@@ -148,3 +148,37 @@ def extraerCaracteristicasLetra(roi_letra):
                 area_agujero_max=area_hijo
                 
     return cantidad_agujeros, area_agujero_max
+
+def identificarRespuestas(img):
+    """
+    Recibe la imagen de un ejercicio.
+    
+    Encuentra la respuesta y la identifica en base
+    a la cantidad y tamaño de los agujeros.
+    
+    Devuelve la letra o None si no es A, B, C o D
+    """
+    respuestas=encontrarRespuestas(img)
+    
+    if len(respuestas)!=1:
+        return None
+    
+    x, y, w, h, area = respuestas[0]
+    
+    # Recortamos la letra con un margen
+    margen = 2
+    letra_roi = img[max(0, y-margen) : y+h+margen, max(0, x-margen) : x+w+margen]
+
+    # Sacamos los agujeros y el área del agujero más grande
+    agujeros, area_agujero = extraerCaracteristicasLetra(letra_roi)
+    if agujeros == 0:
+        return 'C'
+    elif agujeros == 2:
+        return 'B'
+    elif agujeros == 1:
+        if area_agujero > 30:
+            return 'D'
+        else:
+            return 'A'
+    else:
+        return None

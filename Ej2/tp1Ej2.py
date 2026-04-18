@@ -14,18 +14,7 @@ for e in range(1, 11):
     (l, t), (r, b) = bordes[e]
     ejercicio = img[t:b, l:r]
 
-    respuestas=encontrarRespuestas(ejercicio)
+    respuesta=identificarRespuestas(ejercicio)
         
     # Mostramos el ejercicio
-    plt.figure(figsize=(4, 2))
-    plt.imshow(ejercicio, cmap='gray')
-    plt.title(f'Ejercicio {e} | Respuestas detectadas: {len(respuestas)}')
-    ax = plt.gca()
-    
-    # con rectángulos en las respuestas detectadas
-    for (x, y, w, h, _) in respuestas:
-        rect = patches.Rectangle((x, y), w, h, linewidth=1.5, edgecolor='red', facecolor='none')
-        ax.add_patch(rect)
-        
-    plt.axis('off')
-    plt.show()
+    print(f"Respuesta del ejercicio {e}: {respuesta}")
