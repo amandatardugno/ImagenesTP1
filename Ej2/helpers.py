@@ -89,9 +89,8 @@ def encontrarRespuestas(img):
             break
 
     if not linea:
-        print("No encontré la línea de respuesta")
-        exit()
-    
+        return []
+
     respuestas = []
 
     for i in range(1, num_labels):
@@ -172,14 +171,19 @@ def contarPalabras(chars):
     return palabras
 
 
-def validarEncabezado(header_img):
+def detectarCamposEncabezado(header_img):
     """
     Recibe la imagen del encabezado del examen.
 
-    Detecta las 3 líneas de los campos (Name, Date, Class), toma los caracteres
-    que están sobre cada una y valida según las restricciones del enunciado.
+    Detecta las 3 líneas de los campos (Name, Date, Class) y los caracteres
+    que están justo arriba de cada una.
 
-    Devuelve un dict con el estado (OK/MAL) de cada campo.
+    Devuelve una tupla (lineas, campos):
+    - lineas: lista de 3 tuplas (x, y, w, h), ordenadas de izquierda a derecha.
+    - campos: lista de 3 listas de chars (x, y, w, h) ordenados por x,
+              correspondientes a [Name, Date, Class].
+
+    Si no se detectan al menos 3 líneas, devuelve (None, None).
     """
     _, img_th = cv2.threshold(header_img, 150, 255, cv2.THRESH_BINARY_INV)
     num_labels, _, stats, _ = cv2.connectedComponentsWithStats(img_th, 8, cv2.CV_32S)
@@ -202,7 +206,7 @@ def validarEncabezado(header_img):
             componentes.append((x, y, w, h))
 
     if len(lineas) < 3:
-        return {"Name": "MAL", "Date": "MAL", "Class": "MAL"}
+        return None, None
 
     # Las 3 líneas más anchas son las de los campos. Las ordenamos de izquierda a derecha.
     lineas.sort(key=lambda l: l[2], reverse=True)
@@ -228,6 +232,21 @@ def validarEncabezado(header_img):
         chars.sort(key=lambda c: c[0])
         campos.append(chars)
 
+    return lineas, campos
+
+
+def validarEncabezado(header_img):
+    """
+    Recibe la imagen del encabezado del examen.
+
+    Valida los campos Name, Date y Class según las restricciones del enunciado.
+
+    Devuelve un dict con el estado (OK/MAL) de cada campo.
+    """
+    _, campos = detectarCamposEncabezado(header_img)
+    if campos is None:
+        return {"Name": "MAL", "Date": "MAL", "Class": "MAL"}
+
     name_chars, date_chars, class_chars = campos
 
     # Name: al menos 2 palabras y no más de 25 caracteres
@@ -243,74 +262,40 @@ def validarEncabezado(header_img):
         "Class": "OK" if class_ok else "MAL",
     }
 
+
 def obtenerName(header_img):
     """
     Recibe la imagen del encabezado del examen.
 
-    Detecta la línea del campo Name, toma los caracteres
-    que están sobre ella y recorta la imagen sobre ellas.
-
-    Devuelve una imagen del campo Name.
+    Detecta la línea del campo Name y los caracteres sobre ella, y devuelve
+    una imagen recortada con ese campo.
     """
-    _, img_th = cv2.threshold(header_img, 150, 255, cv2.THRESH_BINARY_INV)
-    num_labels, _, stats, _ = cv2.connectedComponentsWithStats(img_th, 8, cv2.CV_32S)
-
-    # Separamos las componentes en líneas (mucho más anchas que altas) y caracteres
-    lineas = []
-    componentes = []
-    for i in range(1, num_labels):
-        x = stats[i, cv2.CC_STAT_LEFT]
-        y = stats[i, cv2.CC_STAT_TOP]
-        w = stats[i, cv2.CC_STAT_WIDTH]
-        h = stats[i, cv2.CC_STAT_HEIGHT]
-        area = stats[i, cv2.CC_STAT_AREA]
-
-        if area < 5:
-            continue
-        if w > 3*h and w > 30:
-            lineas.append((x, y, w, h))
-        else:
-            componentes.append((x, y, w, h))
-
-    if len(lineas) < 3:
+    lineas, campos = detectarCamposEncabezado(header_img)
+    if lineas is None:
         return None
 
-    # Las 3 líneas más anchas son las de los campos. Las ordenamos de izquierda a derecha.
-    lineas.sort(key=lambda l: l[2], reverse=True)
-    lineas = lineas[:3]
-    lineas.sort(key=lambda l: l[0])
+    xl, yl, wl, hl = lineas[0]
+    name_chars = campos[0]
 
-    linea_name = lineas[0]
-
-    # Para cada línea, juntamos los caracteres que están justo arriba de la misma
-    xl, yl, wl, hl = linea_name
-    right_limit = 0
+    # Calculamos el bounding box de los caracteres del Name
+    alto_header, ancho_header = header_img.shape
+    top_line = alto_header
+    left_limit = ancho_header
     bottom_line = 0
-    top_line, left_limit = header_img.shape
+    right_limit = 0
+    for x, y, w, h in name_chars:
+        top_line = min(y, top_line)
+        left_limit = min(x, left_limit)
+        bottom_line = max(y+h, bottom_line)
+        right_limit = max(x+w, right_limit)
 
-    for x, y, w, h in componentes:
-        cx = x + w/2
-        # El centro horizontal del char debe caer sobre la línea
-        if cx < xl or cx > xl + wl:
-            continue
-        # Debe estar arriba de la línea
-        if y + h > yl:
-            continue
-        # Pero no muy lejos
-        if yl - (y + h) > 25:
-            continue
-        bottom_line=max(y+h,bottom_line)
-        top_line=min(y,top_line)
-        right_limit=max(x+w,right_limit)
-        left_limit=min(x,left_limit)
-
+    # Agregamos un margen proporcional al espacio entre los chars y la línea
     gap = yl - bottom_line
-    top_line=max(top_line-gap,0)
+    top_line = max(top_line - gap, 0)
     left_limit -= gap
     right_limit += gap
-    img_name = header_img[top_line:yl,left_limit:right_limit]
 
-    return img_name
+    return header_img[top_line:yl, left_limit:right_limit]
 
 def identificarRespuestas(img):
     """
