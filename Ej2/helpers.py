@@ -219,7 +219,7 @@ def validarEncabezado(header_img):
             if cx < xl or cx > xl + wl:
                 continue
             # Debe estar arriba de la línea
-            if y + h > yl + 3:
+            if y + h > yl:
                 continue
             # Pero no muy lejos
             if yl - (y + h) > 25:
@@ -243,6 +243,74 @@ def validarEncabezado(header_img):
         "Class": "OK" if class_ok else "MAL",
     }
 
+def obtenerName(header_img):
+    """
+    Recibe la imagen del encabezado del examen.
+
+    Detecta la línea del campo Name, toma los caracteres
+    que están sobre ella y recorta la imagen sobre ellas.
+
+    Devuelve una imagen del campo Name.
+    """
+    _, img_th = cv2.threshold(header_img, 150, 255, cv2.THRESH_BINARY_INV)
+    num_labels, _, stats, _ = cv2.connectedComponentsWithStats(img_th, 8, cv2.CV_32S)
+
+    # Separamos las componentes en líneas (mucho más anchas que altas) y caracteres
+    lineas = []
+    componentes = []
+    for i in range(1, num_labels):
+        x = stats[i, cv2.CC_STAT_LEFT]
+        y = stats[i, cv2.CC_STAT_TOP]
+        w = stats[i, cv2.CC_STAT_WIDTH]
+        h = stats[i, cv2.CC_STAT_HEIGHT]
+        area = stats[i, cv2.CC_STAT_AREA]
+
+        if area < 5:
+            continue
+        if w > 3*h and w > 30:
+            lineas.append((x, y, w, h))
+        else:
+            componentes.append((x, y, w, h))
+
+    if len(lineas) < 3:
+        return None
+
+    # Las 3 líneas más anchas son las de los campos. Las ordenamos de izquierda a derecha.
+    lineas.sort(key=lambda l: l[2], reverse=True)
+    lineas = lineas[:3]
+    lineas.sort(key=lambda l: l[0])
+
+    linea_name = lineas[0]
+
+    # Para cada línea, juntamos los caracteres que están justo arriba de la misma
+    xl, yl, wl, hl = linea_name
+    right_limit = 0
+    bottom_line = 0
+    top_line, left_limit = header_img.shape
+
+    for x, y, w, h in componentes:
+        cx = x + w/2
+        # El centro horizontal del char debe caer sobre la línea
+        if cx < xl or cx > xl + wl:
+            continue
+        # Debe estar arriba de la línea
+        if y + h > yl:
+            continue
+        # Pero no muy lejos
+        if yl - (y + h) > 25:
+            continue
+        bottom_line=max(y+h,bottom_line)
+        top_line=min(y,top_line)
+        right_limit=max(x+w,right_limit)
+        left_limit=min(x,left_limit)
+
+    gap = yl - bottom_line
+    top_line=max(top_line-gap,0)
+    left_limit -= gap
+    right_limit += gap
+    img_name = header_img[top_line:yl,left_limit:right_limit]
+
+    return img_name
 
 def identificarRespuestas(img):
     """
