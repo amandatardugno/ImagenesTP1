@@ -4,6 +4,11 @@ Primer proyecto de la materia Procesamiento de Imágenes de la Tecnicatura Unive
 
 El trabajo práctico busca implementar un ecualizado local del histograma en su primer ejercicio, y una corrección automática de exámenes en su segundo ejercicio.
 
+# Integrantes
+Amanda Tardugno 
+Lucas Díaz Celauro 
+Adriano Marzol Perini
+
 ---
 
 ## Estructura del proyecto
