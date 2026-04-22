@@ -1,8 +1,10 @@
 import cv2
 import numpy as np
 
+GLOBAL_THRESHOLD = 150
+
 def bordesExamen(img):
-    th=192
+    th=GLOBAL_THRESHOLD
 
     img_th=img<th
 
@@ -68,7 +70,7 @@ def encontrarRespuestas(img):
     # Umbralizamos e invertimos
     # Lo negro pasa a ser blanco (255) y el fondo blanco pasa a negro (0)
     # Esto lo hacemos para que funcione buscar las componentes conectadas
-    _, img_th = cv2.threshold(img, 150, 255, cv2.THRESH_BINARY_INV)
+    _, img_th = cv2.threshold(img, GLOBAL_THRESHOLD, 255, cv2.THRESH_BINARY_INV)
 
     # Etiquetamos las componentes conectadas
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(img_th, 8, cv2.CV_32S)
@@ -117,9 +119,9 @@ def encontrarRespuestas(img):
 def extraerCaracteristicasLetra(roi_letra):
     """
     Recibe la imagen binarizada de una sola letra recortada.
-    Devuelve (cantidad_agujeros, area_agujero_max)
+    Devuelve (cantidad_agujeros, area_agujero_max, area_externa)
     """
-    _, roi_letra = cv2.threshold(roi_letra, 150, 255, cv2.THRESH_BINARY_INV)
+    _, roi_letra = cv2.threshold(roi_letra, GLOBAL_THRESHOLD, 255, cv2.THRESH_BINARY_INV)
 
     # Buscamos los contornos 
     contours, hierarchy = cv2.findContours(roi_letra, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
@@ -132,12 +134,15 @@ def extraerCaracteristicasLetra(roi_letra):
     
     cantidad_agujeros = 0
     area_agujero_max = 0
-    
+    area_externa = 0
+
     # jerarquia[i] = [Next, Previous, First_Child, Parent]
     for i, contorno in enumerate(contours):
         padre = jerarquia[i, 3] # El índice 3 es el 'Parent'
         
-        if padre != -1:
+        if padre == -1:
+            area_externa = cv2.contourArea(contorno)
+        else:
             # Si tiene un padre (Parent != -1), significa que es un contorno interno (un agujero)
             area_hijo = cv2.contourArea(contorno)
             # Filtramos por si detectó un píxel suelto adentro como agujero
@@ -146,7 +151,7 @@ def extraerCaracteristicasLetra(roi_letra):
             if area_hijo>area_agujero_max:
                 area_agujero_max=area_hijo
                 
-    return cantidad_agujeros, area_agujero_max
+    return cantidad_agujeros, area_agujero_max, area_externa
 
 def contarPalabras(chars):
     """
@@ -185,7 +190,7 @@ def detectarCamposEncabezado(header_img):
 
     Si no se detectan al menos 3 líneas, devuelve (None, None).
     """
-    _, img_th = cv2.threshold(header_img, 150, 255, cv2.THRESH_BINARY_INV)
+    _, img_th = cv2.threshold(header_img, GLOBAL_THRESHOLD, 255, cv2.THRESH_BINARY_INV)
     num_labels, _, stats, _ = cv2.connectedComponentsWithStats(img_th, 8, cv2.CV_32S)
 
     # Separamos las componentes en líneas (mucho más anchas que altas) y caracteres
@@ -318,13 +323,14 @@ def identificarRespuestas(img):
     letra_roi = img[max(0, y-margen) : y+h+margen, max(0, x-margen) : x+w+margen]
 
     # Sacamos los agujeros y el área del agujero más grande
-    agujeros, area_agujero = extraerCaracteristicasLetra(letra_roi)
+    agujeros, area_agujero, area_externa = extraerCaracteristicasLetra(letra_roi)
+
     if agujeros == 0:
         return 'C'
     elif agujeros == 2:
         return 'B'
     elif agujeros == 1:
-        if area_agujero > 30:
+        if area_agujero > 0.75*area_externa:
             return 'D'
         else:
             return 'A'

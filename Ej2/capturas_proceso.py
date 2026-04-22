@@ -22,6 +22,7 @@ from helpers import (
     encontrarRespuestas,
     extraerCaracteristicasLetra,
     identificarRespuestas,
+    GLOBAL_THRESHOLD,
 )
 
 EXAMEN = "./Ej2/examen_4.png"
@@ -154,10 +155,10 @@ plt.show()
 x, y, w, h, area = respuestas[0]
 margen = 2
 letra_roi = ejercicio[max(0, y-margen):y+h+margen, max(0, x-margen):x+w+margen]
-agujeros, area_agujero = extraerCaracteristicasLetra(letra_roi)
+agujeros, area_agujero, _ = extraerCaracteristicasLetra(letra_roi)
 
 # Para visualizar, dibujamos los contornos hijos (agujeros) en rojo sobre la letra
-_, letra_th = cv2.threshold(letra_roi, 150, 255, cv2.THRESH_BINARY_INV)
+_, letra_th = cv2.threshold(letra_roi, GLOBAL_THRESHOLD, 255, cv2.THRESH_BINARY_INV)
 contours, hierarchy = cv2.findContours(letra_th, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
 letra_color = cv2.cvtColor(letra_roi, cv2.COLOR_GRAY2RGB)
 if hierarchy is not None:
